@@ -32,22 +32,17 @@ components:
           value: budget_db
 
 commands:
-  - id: install-deps
+  - id: auto-setup
     exec:
       component: python-runtime
-      # We use '|| true' so the workspace doesn't crash if a pip install fails
-      commandLine: "pip install mysql-connector-python && pip install -r Openshift-App/requirements.txt || true"
-      workingDir: ${PROJECT_SOURCE}
-
-  - id: init-db
-    exec:
-      component: python-runtime
-      # Added a sleep to give MySQL 10 seconds to start up first
+      # We wrap everything in a subshell that always returns success (exit 0)
       commandLine: |
-        sleep 10 && \
-        python3 -c "import mysql.connector; conn = mysql.connector.connect(host='localhost', user='root', password='rootpassword'); cursor = conn.cursor(); cursor.execute('CREATE DATABASE IF NOT EXISTS budget_db'); conn.close(); print('DB Ready!')" || true
+        (sleep 15 && \
+        pip install mysql-connector-python && \
+        pip install -r Openshift-App/requirements.txt && \
+        python3 -c "import mysql.connector; conn = mysql.connector.connect(host='localhost', user='root', password='rootpassword'); cursor = conn.cursor(); cursor.execute('CREATE DATABASE IF NOT EXISTS budget_db'); conn.close(); print('Ready!')") & echo "Setup started in background"
+      workingDir: ${PROJECT_SOURCE}
 
 events:
   postStart:
-    - install-deps
-    - init-db
+    - auto-setup
