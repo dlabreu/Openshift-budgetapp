@@ -1,6 +1,10 @@
 schemaVersion: 2.2.0
 metadata:
   name: budgetapp-dev-env
+  # This attribute tells the Operator to look for our secret and mount it
+  attributes:
+    project.scm.server: github.com
+    project.scm.secret: github-token
 components:
   - name: python-runtime
     container:
@@ -21,16 +25,6 @@ components:
           value: rootpassword
         - name: DB_NAME
           value: budget_db
-      # --- ADDED FOR GITHUB AUTH ---
-      volumeMounts:
-        - name: git-credentials
-          path: /home/user/.git-credentials
-          subPath: .git-credentials
-  
-  # --- ADDED VOLUME COMPONENT FOR THE SECRET ---
-  - name: git-credentials
-    secret:
-      secretName: github-token
 
   - name: mysql-db
     container:
