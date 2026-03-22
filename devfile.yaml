@@ -2,7 +2,6 @@ schemaVersion: 2.2.0
 metadata:
   name: budgetapp-dev-env
 components:
-  # The Python Runtime
   - name: python-runtime
     container:
       image: quay.io/devfile/universal-developer-image:latest
@@ -22,8 +21,6 @@ components:
           value: rootpassword
         - name: DB_NAME
           value: budget_db
-
-  # The MySQL Database
   - name: mysql-db
     container:
       image: registry.redhat.io/rhel8/mysql-80:latest
@@ -35,17 +32,22 @@ components:
           value: budget_db
 
 commands:
-  # Auto-setup for the environment
-  - id: setup-env
+  - id: install-deps
     exec:
       component: python-runtime
-      commandLine: |
-        pip install mysql-connector-python && \
-        pip install -r Openshift-App/requirements.txt && \
-        python3 -c "import mysql.connector; conn = mysql.connector.connect(host='localhost', user='root', password='rootpassword'); cursor = conn.cursor(); cursor.execute('CREATE DATABASE IF NOT EXISTS budget_db'); conn.close(); print('Environment Ready!')"
+      # We use '|| true' so the workspace doesn't crash if a pip install fails
+      commandLine: "pip install mysql-connector-python && pip install -r Openshift-App/requirements.txt || true"
       workingDir: ${PROJECT_SOURCE}
 
+  - id: init-db
+    exec:
+      component: python-runtime
+      # Added a sleep to give MySQL 10 seconds to start up first
+      commandLine: |
+        sleep 10 && \
+        python3 -c "import mysql.connector; conn = mysql.connector.connect(host='localhost', user='root', password='rootpassword'); cursor = conn.cursor(); cursor.execute('CREATE DATABASE IF NOT EXISTS budget_db'); conn.close(); print('DB Ready!')" || true
+
 events:
-  # This triggers the setup command automatically on start
   postStart:
-    - setup-env
+    - install-deps
+    - init-db
