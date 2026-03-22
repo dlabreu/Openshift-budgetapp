@@ -1,7 +1,6 @@
 schemaVersion: 2.2.0
 metadata:
   name: budgetapp-dev-env
-  # This attribute tells the Operator to look for our secret and mount it
   attributes:
     project.scm.server: github.com
     project.scm.secret: github-token
@@ -16,7 +15,16 @@ components:
           targetPort: 5000
           exposure: public
           protocol: http
+      # --- PRO GIT CONFIGURATION ---
       env:
+        - name: GIT_AUTHOR_NAME
+          value: "Your Name"
+        - name: GIT_AUTHOR_EMAIL
+          value: "your-github-email@example.com"
+        - name: GIT_COMMITTER_NAME
+          value: "Your Name"
+        - name: GIT_COMMITTER_EMAIL
+          value: "your-github-email@example.com"
         - name: DB_HOST
           value: localhost
         - name: DB_USER
@@ -47,7 +55,6 @@ commands:
         pip install mysql-connector-python && \
         pip install -r Openshift-App/requirements.txt && \
         python3 -c "import mysql.connector; conn = mysql.connector.connect(host='localhost', user='root', password='rootpassword'); cursor = conn.cursor(); cursor.execute('CREATE DATABASE IF NOT EXISTS budget_db'); conn.close(); print('Ready!')") & \
-        git config --global credential.helper store && \
         echo "Setup started"
       workingDir: ${PROJECT_SOURCE}
 
