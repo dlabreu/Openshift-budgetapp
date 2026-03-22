@@ -21,10 +21,19 @@ components:
           value: rootpassword
         - name: DB_NAME
           value: budget_db
+      # --- ADDED FOR GITHUB AUTH ---
+      volumeMounts:
+        - name: git-credentials
+          path: /home/user/.git-credentials
+          subPath: .git-credentials
+  
+  # --- ADDED VOLUME COMPONENT FOR THE SECRET ---
+  - name: git-credentials
+    secret:
+      secretName: github-token
 
   - name: mysql-db
     container:
-      # Switching to the bitnami image - it's much more stable for Dev Spaces
       image: public.ecr.aws/bitnami/mysql:8.0
       memoryLimit: 512Mi
       env:
@@ -43,7 +52,9 @@ commands:
         (sleep 20 && \
         pip install mysql-connector-python && \
         pip install -r Openshift-App/requirements.txt && \
-        python3 -c "import mysql.connector; conn = mysql.connector.connect(host='localhost', user='root', password='rootpassword'); cursor = conn.cursor(); cursor.execute('CREATE DATABASE IF NOT EXISTS budget_db'); conn.close(); print('Ready!')") & echo "Setup started"
+        python3 -c "import mysql.connector; conn = mysql.connector.connect(host='localhost', user='root', password='rootpassword'); cursor = conn.cursor(); cursor.execute('CREATE DATABASE IF NOT EXISTS budget_db'); conn.close(); print('Ready!')") & \
+        git config --global credential.helper store && \
+        echo "Setup started"
       workingDir: ${PROJECT_SOURCE}
 
 events:
