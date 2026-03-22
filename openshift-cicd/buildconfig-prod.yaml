@@ -1,52 +1,39 @@
 ---
 # BuildConfig — MAIN branch (prod)
-# Triggered when a PR is merged into main.
-# Builds the image, pushes to the internal ImageStream as :latest,
-# AND pushes a copy to quay.io for external storage.
+# Triggered by GitHub webhook when a PR is merged to main.
+# Builds the image and pushes to:
+#   - quay.io/dabreu/budgetapp:latest  (external, prod image)
+#   - internal ImageStream as :latest  (triggers DeploymentConfig in prod)
 apiVersion: build.openshift.io/v1
 kind: BuildConfig
 metadata:
   name: budgetapp-prod
-  namespace: admin-devspaces          # runs in admin-devspaces namespace but deploys to prod
+  namespace: admin-devspaces
   labels:
     app: budgetapp
     branch: main
 spec:
-  # ── Source ────────────────────────────────────────────────────────────────
   source:
     type: Git
     git:
       uri: https://github.com/dlabreu/Openshift-budgetapp.git
-      ref: main            # watches the main branch
+      ref: main
     contextDir: /
 
-  # ── Strategy ─────────────────────────────────────────────────────────────
   strategy:
     type: Docker
     dockerStrategy:
       dockerfilePath: Containerfile
 
-  # ── Output ───────────────────────────────────────────────────────────────
-  # Primary output: internal ImageStream
   output:
     to:
-      kind: ImageStreamTag
-      name: budgetapp:latest
-
-    # Also push to quay.io using the robot account secret
+      kind: DockerImage
+      name: quay.io/dabreu/budgetapp:latest
     pushSecret:
       name: quay-push-secret
 
-  # ── Post-build: also tag to quay.io ──────────────────────────────────────
-  # OpenShift will push to the 'to' destination above.
-  # To also push to quay.io, we use a post-commit hook or a second output.
-  # For a demo the simplest approach is to configure quay.io as the primary
-  # output and let the ImageStream import it. See the setup guide for details.
-
-  # ── Triggers ─────────────────────────────────────────────────────────────
   triggers:
     - type: GitHub
       github:
-        secret: budgetapp-webhook-prod   # must match the Secret below
-
+        secret: budgetapp-webhook-prod
     - type: ImageChange

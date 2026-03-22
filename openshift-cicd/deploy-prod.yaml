@@ -22,28 +22,38 @@ type: Opaque
 stringData:
   SECRET_KEY: "change-this-to-a-real-random-string-for-prod"
 ---
-# DeploymentConfig — PROD namespace
-# Watches the ImageStream for the :latest tag.
-# Auto-deploys when main branch is merged and the BuildConfig pushes :latest.
-apiVersion: apps.openshift.io/v1
-kind: DeploymentConfig
+# Deployment — PROD namespace
+# Pulls from quay.io/dabreu/budgetapp:latest
+# Use a standard Deployment (not DeploymentConfig) — compatible with OCP 4.14+
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: budgetapp
   namespace: prod
   labels:
     app: budgetapp
+  annotations:
+    # This annotation is used by the rollout trigger script to detect new images
+    image.openshift.io/triggers: >
+      [{"from":{"kind":"DockerImage","name":"quay.io/dabreu/budgetapp:latest"},
+        "fieldPath":"spec.template.spec.containers[?(@.name==\"budgetapp\")].image"}]
 spec:
   replicas: 1
   selector:
-    app: budgetapp
+    matchLabels:
+      app: budgetapp
   template:
     metadata:
       labels:
         app: budgetapp
     spec:
+      # Use the quay pull secret so the pod can pull the image
+      imagePullSecrets:
+        - name: quay-pull-secret
       containers:
         - name: budgetapp
-          image: ' '     # placeholder — ImageChange trigger fills this in
+          image: quay.io/dabreu/budgetapp:latest
+          imagePullPolicy: Always   # Always pull so new :latest is picked up
           ports:
             - containerPort: 8080
           env:
@@ -78,20 +88,6 @@ spec:
         - name: app-data
           persistentVolumeClaim:
             claimName: budgetapp-data
-
-  # ── Triggers ────────────────────────────────────────────────────────────
-  triggers:
-    # Auto-deploy when the :latest ImageStreamTag gets a new image
-    - type: ImageChange
-      imageChangeParams:
-        automatic: true
-        containerNames:
-          - budgetapp
-        from:
-          kind: ImageStreamTag
-          namespace: admin-devspaces       # reads from the ImageStream in test namespace
-          name: budgetapp:latest
-    - type: ConfigChange
 ---
 # Service
 apiVersion: v1
@@ -109,7 +105,7 @@ spec:
       port: 8080
       targetPort: 8080
 ---
-# Route — HTTPS external access to the prod deployment
+# Route
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:

@@ -1,8 +1,9 @@
 ---
 # BuildConfig — TEST branch
-# Watches the test branch on GitHub.
-# Triggered automatically via a GitHub webhook whenever you push to test.
-# Builds the Containerfile and pushes the result to the ImageStream as :test.
+# Triggered by GitHub webhook on push to test.
+# Builds the image and pushes to:
+#   - quay.io/dabreu/budgetapp:test  (external, for inspection)
+#   - internal ImageStream as :test  (triggers DeploymentConfig in admin-devspaces)
 apiVersion: build.openshift.io/v1
 kind: BuildConfig
 metadata:
@@ -12,33 +13,31 @@ metadata:
     app: budgetapp
     branch: test
 spec:
-  # ── Source ────────────────────────────────────────────────────────────────
   source:
     type: Git
     git:
       uri: https://github.com/dlabreu/Openshift-budgetapp.git
-      ref: test          # watches the test branch
-    contextDir: /         # Containerfile is at the repo root
+      ref: test
+    contextDir: /
 
-  # ── Strategy ─────────────────────────────────────────────────────────────
   strategy:
-    type: Docker           # uses our Containerfile (not S2I)
+    type: Docker
     dockerStrategy:
       dockerfilePath: Containerfile
 
-  # ── Output ───────────────────────────────────────────────────────────────
   output:
     to:
-      kind: ImageStreamTag
-      name: budgetapp:test   # lands in the ImageStream as the :test tag
+      kind: DockerImage
+      name: quay.io/dabreu/budgetapp:test
+    pushSecret:
+      name: quay-push-secret
 
-  # ── Triggers ─────────────────────────────────────────────────────────────
+  # After pushing to quay, also update the internal ImageStream
+  # so the DeploymentConfig auto-triggers
+  postCommit: {}
+
   triggers:
-    # GitHub webhook — OpenShift gives you the webhook URL after applying this.
-    # Add it to your GitHub repo under Settings → Webhooks.
     - type: GitHub
       github:
-        secret: budgetapp-webhook-test   # must match the Secret below
-
-    # Also auto-rebuild if the base image (Fedora 40) gets updated
+        secret: budgetapp-webhook-test
     - type: ImageChange
