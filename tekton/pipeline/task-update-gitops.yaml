@@ -1,0 +1,55 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: update-gitops-image
+  namespace: cicd
+spec:
+  params:
+    - name: image-tag
+      type: string
+      description: "The image tag that was just built: test or prod"
+    - name: deploy-namespace
+      type: string
+      description: "The environment folder to update: test or prod"
+    - name: git-url
+      type: string
+      description: GitOps repo URL
+
+  workspaces:
+    - name: gitops
+      description: Cloned gitops repo
+
+  steps:
+    - name: update-and-push
+      image: registry.redhat.io/openshift4/ose-cli:latest
+      script: |
+        #!/usr/bin/env bash
+        set -e
+
+        cd $(workspaces.gitops.path)
+
+        # Configure git identity for the commit
+        git config user.email "tekton@cicd.cluster"
+        git config user.name "Tekton Pipeline"
+
+        # Update the image tag in the deployment manifest
+        # Uses sed to replace the image line in the correct environment folder
+        MANIFEST="environments/$(params.deploy-namespace)/deployment.yaml"
+        NEW_IMAGE="quay.io/dabreu/budgetapp:$(params.image-tag)"
+
+        echo "Updating ${MANIFEST} with image ${NEW_IMAGE}"
+
+        sed -i "s|image: quay.io/dabreu/budgetapp:.*|image: ${NEW_IMAGE}|g" ${MANIFEST}
+
+        # Check if there is actually a change to commit
+        if git diff --quiet; then
+          echo "No changes to commit — image tag already up to date"
+          exit 0
+        fi
+
+        # Commit and push
+        git add ${MANIFEST}
+        git commit -m "ci: update budgetapp image to $(params.image-tag) [skip ci]"
+        git push origin main
+
+        echo "GitOps repo updated successfully"

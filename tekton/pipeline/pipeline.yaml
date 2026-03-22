@@ -1,0 +1,129 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: budgetapp-pipeline
+  namespace: cicd
+spec:
+  # ── Parameters passed in by the TriggerTemplate ──────────────────────────
+  params:
+    - name: git-url
+      type: string
+      description: App repo URL
+    - name: git-revision
+      type: string
+      description: Branch or commit to build
+    - name: image-tag
+      type: string
+      description: "Image tag to use: test or prod"
+    - name: gitops-url
+      type: string
+      description: GitOps repo URL
+      default: https://github.com/dlabreu/budgetapp-gitops.git
+    - name: deploy-namespace
+      type: string
+      description: "Target namespace: test or prod"
+
+  # ── Shared workspace — all tasks share the same volume ───────────────────
+  workspaces:
+    - name: source
+      description: Cloned app source code
+    - name: gitops
+      description: Cloned gitops repo
+    - name: docker-credentials
+      description: quay.io push secret
+
+  # ── Tasks ─────────────────────────────────────────────────────────────────
+  tasks:
+    # Task 1 — Clone the app repo
+    - name: clone-app
+      taskRef:
+        resolver: cluster
+        params:
+          - name: kind
+            value: Task
+          - name: name
+            value: git-clone
+          - name: namespace
+            value: openshift-pipelines
+      params:
+        - name: url
+          value: $(params.git-url)
+        - name: revision
+          value: $(params.git-revision)
+        - name: deleteExisting
+          value: "true"
+      workspaces:
+        - name: output
+          workspace: source
+
+    # Task 2 — Build and push image to quay.io
+    - name: build-and-push
+      runAfter:
+        - clone-app
+      taskRef:
+        resolver: cluster
+        params:
+          - name: kind
+            value: Task
+          - name: name
+            value: buildah
+          - name: namespace
+            value: openshift-pipelines
+      params:
+        - name: IMAGE
+          value: quay.io/dabreu/budgetapp:$(params.image-tag)
+        - name: DOCKERFILE
+          value: ./Containerfile
+        - name: CONTEXT
+          value: .
+        - name: TLSVERIFY
+          value: "false"
+        - name: FORMAT
+          value: docker
+      workspaces:
+        - name: source
+          workspace: source
+        - name: dockerconfig
+          workspace: docker-credentials
+
+    # Task 3 — Clone the gitops repo
+    - name: clone-gitops
+      runAfter:
+        - build-and-push
+      taskRef:
+        resolver: cluster
+        params:
+          - name: kind
+            value: Task
+          - name: name
+            value: git-clone
+          - name: namespace
+            value: openshift-pipelines
+      params:
+        - name: url
+          value: $(params.gitops-url)
+        - name: revision
+          value: main
+        - name: deleteExisting
+          value: "true"
+      workspaces:
+        - name: output
+          workspace: gitops
+
+    # Task 4 — Update the image tag in the gitops repo and push
+    - name: update-gitops
+      runAfter:
+        - clone-gitops
+      taskRef:
+        name: update-gitops-image
+        kind: Task
+      params:
+        - name: image-tag
+          value: $(params.image-tag)
+        - name: deploy-namespace
+          value: $(params.deploy-namespace)
+        - name: git-url
+          value: $(params.gitops-url)
+      workspaces:
+        - name: gitops
+          workspace: gitops

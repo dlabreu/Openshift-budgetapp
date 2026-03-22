@@ -1,0 +1,70 @@
+---
+# Webhook secret — EventListener uses this to validate
+# that webhook calls are genuinely from GitHub
+apiVersion: v1
+kind: Secret
+metadata:
+  name: github-webhook-secret
+  namespace: cicd
+type: Opaque
+stringData:
+  secret: budgetapp-webhook-secret-change-me
+
+---
+# Role — allows the EventListener SA to create PipelineRuns
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: tekton-triggers-role
+  namespace: cicd
+rules:
+  - apiGroups: ["triggers.tekton.dev"]
+    resources:
+      - eventlisteners
+      - triggerbindings
+      - triggertemplates
+      - triggers
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["tekton.dev"]
+    resources:
+      - pipelineruns
+      - pipelineresources
+    verbs: ["create", "get", "list"]
+  - apiGroups: [""]
+    resources:
+      - configmaps
+      - secrets
+    verbs: ["get", "list", "watch"]
+
+---
+# RoleBinding — binds the role to the pipeline service account
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tekton-triggers-rolebinding
+  namespace: cicd
+subjects:
+  - kind: ServiceAccount
+    name: pipeline
+    namespace: cicd
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: tekton-triggers-role
+
+---
+# Route — exposes the EventListener so GitHub can reach it
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: budgetapp-webhook
+  namespace: cicd
+spec:
+  to:
+    kind: Service
+    name: el-budgetapp-listener
+  port:
+    targetPort: http-listener
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
