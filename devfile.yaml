@@ -1,11 +1,12 @@
 schemaVersion: 2.2.0
 metadata:
   name: budgetapp-dev-env
-  # This attribute tells the Operator to mount the secret as Git credentials
   attributes:
     project.scm.server: github.com
     project.scm.secret: github-token
+
 components:
+  # ── Main dev container ──────────────────────────────────────────────────────
   - name: python-runtime
     container:
       image: quay.io/devfile/universal-developer-image:latest
@@ -13,52 +14,108 @@ components:
       mountSources: true
       endpoints:
         - name: flask-app
-          targetPort: 5000
+          targetPort: 8080        # FIX: was 5000, app actually listens on 8080
           exposure: public
           protocol: http
       env:
-        - name: DB_HOST
-          value: localhost
-        - name: DB_USER
-          value: root
-        - name: DB_PASSWORD
-          value: rootpassword
-        - name: DB_NAME
-          value: budget_db
+        - name: SECRET_KEY
+          value: dev-only-secret-key-change-in-prod
+        # The app uses JSON files in data/ — no DB env vars needed for dev.
+        # If you later migrate to PostgreSQL, add DB_HOST / DB_USER etc. here.
 
-  - name: mysql-db
-    container:
-      image: public.ecr.aws/bitnami/mysql:8.0
-      memoryLimit: 512Mi
-      env:
-        - name: MYSQL_ROOT_PASSWORD
-          value: rootpassword
-        - name: MYSQL_DATABASE
-          value: budget_db
-        - name: MYSQL_AUTHENTICATION_PLUGIN
-          value: mysql_native_password
+# NOTE: The MySQL sidecar container has been REMOVED.
+# The app stores all data as JSON files in Openshift-App/data/.
+# It does NOT connect to any database. Adding MySQL here was misleading
+# and caused a dev/prod mismatch (template used PostgreSQL anyway).
+# Data persistence in the cluster is handled by a PVC mounted at /app/data.
 
 commands:
-  - id: auto-setup
+  # ── Git identity from secret ────────────────────────────────────────────────
+  - id: configure-git
     exec:
       component: python-runtime
-      # We pull the identity inside the script to avoid schema validation issues
       commandLine: |
-        export GIT_AUTHOR_NAME=$(oc get secret github-token -o jsonpath='{.data.user\.name}' | base64 -d)
-        export GIT_AUTHOR_EMAIL=$(oc get secret github-token -o jsonpath='{.data.user\.email}' | base64 -d)
-        git config --global user.name "$GIT_AUTHOR_NAME"
-        git config --global user.email "$GIT_AUTHOR_EMAIL"
-        git config --global credential.helper 'store'
-        echo "https://dlabreu:$(oc get secret github-token -o jsonpath='{.data.password}' | base64 -d)@github.com" > ~/.git-credentials
-        (sleep 20 && \
-        pip install mysql-connector-python && \
-        pip install -r Openshift-App/requirements.txt && \
-        python3 -c "import mysql.connector; conn = mysql.connector.connect(host='localhost', user='root', password='rootpassword'); cursor = conn.connector.connect(host='localhost', user='root', password='rootpassword'); cursor.execute('CREATE DATABASE IF NOT EXISTS budget_db'); conn.close(); print('Ready!')") & \
-        echo "Identity and Auth configured from Secret"
+        export GIT_NAME=$(oc get secret github-token -o jsonpath='{.data.user\.name}' | base64 -d)
+        export GIT_EMAIL=$(oc get secret github-token -o jsonpath='{.data.user\.email}' | base64 -d)
+        export GIT_PAT=$(oc get secret github-token -o jsonpath='{.data.password}' | base64 -d)
+        git config --global user.name  "$GIT_NAME"
+        git config --global user.email "$GIT_EMAIL"
+        git config --global credential.helper store
+        echo "https://dlabreu:${GIT_PAT}@github.com" > ~/.git-credentials
+        echo "Git identity configured."
+      workingDir: ${PROJECT_SOURCE}
+
+  # ── Install Python dependencies ─────────────────────────────────────────────
+  - id: install-deps
+    exec:
+      component: python-runtime
+      commandLine: |
+        pip install -r Openshift-App/requirements.txt
+        echo "Dependencies installed."
+      workingDir: ${PROJECT_SOURCE}
+
+  # ── Run the app locally inside Dev Workspaces ───────────────────────────────
+  - id: run-app
+    exec:
+      component: python-runtime
+      commandLine: |
+        cd Openshift-App
+        python3 main.py
+      workingDir: ${PROJECT_SOURCE}
+
+  # ── Build the container image ────────────────────────────────────────────────
+  # Uses podman (available in the universal-developer-image).
+  # Replace <your-namespace> and <your-registry> with your actual values.
+  - id: build-image
+    exec:
+      component: python-runtime
+      commandLine: |
+        IMAGE_REGISTRY="image-registry.openshift-image-registry.svc:5000"
+        NAMESPACE=$(oc project -q)
+        IMAGE_TAG="${IMAGE_REGISTRY}/${NAMESPACE}/budgetapp:latest"
+        echo "Building image: ${IMAGE_TAG}"
+        podman build \
+          --format=docker \
+          -f Containerfile \
+          -t "${IMAGE_TAG}" \
+          .
+        echo "Build complete."
+      workingDir: ${PROJECT_SOURCE}
+
+  # ── Push the image to the internal OpenShift registry ───────────────────────
+  - id: push-image
+    exec:
+      component: python-runtime
+      commandLine: |
+        IMAGE_REGISTRY="image-registry.openshift-image-registry.svc:5000"
+        NAMESPACE=$(oc project -q)
+        IMAGE_TAG="${IMAGE_REGISTRY}/${NAMESPACE}/budgetapp:latest"
+        echo "Logging into internal registry..."
+        podman login \
+          --username=$(oc whoami) \
+          --password=$(oc whoami -t) \
+          --tls-verify=false \
+          "${IMAGE_REGISTRY}"
+        echo "Pushing image: ${IMAGE_TAG}"
+        podman push --tls-verify=false "${IMAGE_TAG}"
+        echo "Push complete."
+      workingDir: ${PROJECT_SOURCE}
+
+  # ── Deploy to the current namespace ─────────────────────────────────────────
+  - id: deploy
+    exec:
+      component: python-runtime
+      commandLine: |
+        NAMESPACE=$(oc project -q)
+        # Replace the image reference in the template with the built image
+        IMAGE_REGISTRY="image-registry.openshift-image-registry.svc:5000"
+        IMAGE_TAG="${IMAGE_REGISTRY}/${NAMESPACE}/budgetapp:latest"
+        sed "s|budgetapp-build:latest|${IMAGE_TAG}|g" openshift-template.yaml \
+          | oc apply -f -
+        echo "Deployed to namespace: ${NAMESPACE}"
       workingDir: ${PROJECT_SOURCE}
 
 events:
   postStart:
-    - auto-setup
-
-#test    
+    - configure-git
+    - install-deps
