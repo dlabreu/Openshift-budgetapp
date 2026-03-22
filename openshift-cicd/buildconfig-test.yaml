@@ -1,0 +1,44 @@
+---
+# BuildConfig — TEST branch
+# Watches the test branch on GitHub.
+# Triggered automatically via a GitHub webhook whenever you push to test.
+# Builds the Containerfile and pushes the result to the ImageStream as :test.
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: budgetapp-test
+  namespace: admin-devspaces
+  labels:
+    app: budgetapp
+    branch: test
+spec:
+  # ── Source ────────────────────────────────────────────────────────────────
+  source:
+    type: Git
+    git:
+      uri: https://github.com/dlabreu/Openshift-budgetapp.git
+      ref: test          # watches the test branch
+    contextDir: /         # Containerfile is at the repo root
+
+  # ── Strategy ─────────────────────────────────────────────────────────────
+  strategy:
+    type: Docker           # uses our Containerfile (not S2I)
+    dockerStrategy:
+      dockerfilePath: Containerfile
+
+  # ── Output ───────────────────────────────────────────────────────────────
+  output:
+    to:
+      kind: ImageStreamTag
+      name: budgetapp:test   # lands in the ImageStream as the :test tag
+
+  # ── Triggers ─────────────────────────────────────────────────────────────
+  triggers:
+    # GitHub webhook — OpenShift gives you the webhook URL after applying this.
+    # Add it to your GitHub repo under Settings → Webhooks.
+    - type: GitHub
+      github:
+        secret: budgetapp-webhook-test   # must match the Secret below
+
+    # Also auto-rebuild if the base image (Fedora 40) gets updated
+    - type: ImageChange

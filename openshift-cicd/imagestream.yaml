@@ -1,0 +1,23 @@
+---
+# ImageStream — stores the built image tags inside OpenShift's internal registry.
+# Both BuildConfigs push here. DeploymentConfigs watch this for changes
+# and auto-deploy when a new image lands.
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: budgetapp
+  namespace: admin-devspaces
+  labels:
+    app: budgetapp
+spec:
+  lookupPolicy:
+    local: false   # pods reference by ImageStreamTag, not by digest
+  tags:
+    - name: test   # pushed by the test BuildConfig
+      importPolicy: {}
+      referencePolicy:
+        type: Local
+    - name: latest # pushed by the prod BuildConfig (main branch)
+      importPolicy: {}
+      referencePolicy:
+        type: Local

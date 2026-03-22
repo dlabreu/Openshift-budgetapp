@@ -1,0 +1,107 @@
+---
+# DeploymentConfig — TEST namespace
+# Watches the ImageStream for the :test tag.
+# Automatically redeploys every time the BuildConfig pushes a new :test image.
+apiVersion: apps.openshift.io/v1
+kind: DeploymentConfig
+metadata:
+  name: budgetapp
+  namespace: admin-devspaces
+  labels:
+    app: budgetapp
+spec:
+  replicas: 1
+  selector:
+    app: budgetapp
+  template:
+    metadata:
+      labels:
+        app: budgetapp
+    spec:
+      containers:
+        - name: budgetapp
+          # References the ImageStream tag — OpenShift resolves this to the
+          # actual image digest at deploy time.
+          image: ' '     # placeholder — ImageChange trigger fills this in
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: budgetapp-secret
+                  key: SECRET_KEY
+          volumeMounts:
+            - name: app-data
+              mountPath: /app/data
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+        - name: app-data
+          persistentVolumeClaim:
+            claimName: budgetapp-data
+
+  # ── Triggers ────────────────────────────────────────────────────────────
+  triggers:
+    # Auto-deploy when the :test ImageStreamTag gets a new image
+    - type: ImageChange
+      imageChangeParams:
+        automatic: true
+        containerNames:
+          - budgetapp
+        from:
+          kind: ImageStreamTag
+          namespace: admin-devspaces
+          name: budgetapp:test
+    - type: ConfigChange
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: budgetapp
+  namespace: admin-devspaces
+  labels:
+    app: budgetapp
+spec:
+  selector:
+    app: budgetapp
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+# Route — HTTPS external access to the test deployment
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: budgetapp
+  namespace: admin-devspaces
+  labels:
+    app: budgetapp
+spec:
+  to:
+    kind: Service
+    name: budgetapp
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

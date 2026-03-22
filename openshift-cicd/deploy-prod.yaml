@@ -1,0 +1,128 @@
+---
+# PersistentVolumeClaim — PROD data storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: budgetapp-data
+  namespace: prod
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+# Secret — Flask secret key for prod
+apiVersion: v1
+kind: Secret
+metadata:
+  name: budgetapp-secret
+  namespace: prod
+type: Opaque
+stringData:
+  SECRET_KEY: "change-this-to-a-real-random-string-for-prod"
+---
+# DeploymentConfig — PROD namespace
+# Watches the ImageStream for the :latest tag.
+# Auto-deploys when main branch is merged and the BuildConfig pushes :latest.
+apiVersion: apps.openshift.io/v1
+kind: DeploymentConfig
+metadata:
+  name: budgetapp
+  namespace: prod
+  labels:
+    app: budgetapp
+spec:
+  replicas: 1
+  selector:
+    app: budgetapp
+  template:
+    metadata:
+      labels:
+        app: budgetapp
+    spec:
+      containers:
+        - name: budgetapp
+          image: ' '     # placeholder — ImageChange trigger fills this in
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: budgetapp-secret
+                  key: SECRET_KEY
+          volumeMounts:
+            - name: app-data
+              mountPath: /app/data
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+        - name: app-data
+          persistentVolumeClaim:
+            claimName: budgetapp-data
+
+  # ── Triggers ────────────────────────────────────────────────────────────
+  triggers:
+    # Auto-deploy when the :latest ImageStreamTag gets a new image
+    - type: ImageChange
+      imageChangeParams:
+        automatic: true
+        containerNames:
+          - budgetapp
+        from:
+          kind: ImageStreamTag
+          namespace: admin-devspaces       # reads from the ImageStream in test namespace
+          name: budgetapp:latest
+    - type: ConfigChange
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: budgetapp
+  namespace: prod
+  labels:
+    app: budgetapp
+spec:
+  selector:
+    app: budgetapp
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+# Route — HTTPS external access to the prod deployment
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: budgetapp
+  namespace: prod
+  labels:
+    app: budgetapp
+spec:
+  to:
+    kind: Service
+    name: budgetapp
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
