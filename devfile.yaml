@@ -21,26 +21,29 @@ components:
           value: rootpassword
         - name: DB_NAME
           value: budget_db
+
   - name: mysql-db
     container:
-      image: registry.redhat.io/rhel8/mysql-80:latest
+      # Switching to the bitnami image - it's much more stable for Dev Spaces
+      image: public.ecr.aws/bitnami/mysql:8.0
       memoryLimit: 512Mi
       env:
         - name: MYSQL_ROOT_PASSWORD
           value: rootpassword
         - name: MYSQL_DATABASE
           value: budget_db
+        - name: MYSQL_AUTHENTICATION_PLUGIN
+          value: mysql_native_password
 
 commands:
   - id: auto-setup
     exec:
       component: python-runtime
-      # We wrap everything in a subshell that always returns success (exit 0)
       commandLine: |
-        (sleep 15 && \
+        (sleep 20 && \
         pip install mysql-connector-python && \
         pip install -r Openshift-App/requirements.txt && \
-        python3 -c "import mysql.connector; conn = mysql.connector.connect(host='localhost', user='root', password='rootpassword'); cursor = conn.cursor(); cursor.execute('CREATE DATABASE IF NOT EXISTS budget_db'); conn.close(); print('Ready!')") & echo "Setup started in background"
+        python3 -c "import mysql.connector; conn = mysql.connector.connect(host='localhost', user='root', password='rootpassword'); cursor = conn.cursor(); cursor.execute('CREATE DATABASE IF NOT EXISTS budget_db'); conn.close(); print('Ready!')") & echo "Setup started"
       workingDir: ${PROJECT_SOURCE}
 
 events:
