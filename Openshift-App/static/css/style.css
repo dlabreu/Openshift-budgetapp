@@ -4,7 +4,7 @@
 
 :root {
   --sidebar-width: 240px;
-  --sidebar-bg: #14532d;
+  --sidebar-bg: #2c1453;
   --sidebar-text: #94a3b8;
   --sidebar-active: #22c55e;
   --topbar-height: 64px;
@@ -39,7 +39,7 @@ body {
 
 .sidebar-brand {
   padding: 1.25rem 1.5rem;
-  color: #fff;
+  color: #ffffff;
   font-size: 1.2rem;
   font-weight: 700;
   letter-spacing: -0.02em;
