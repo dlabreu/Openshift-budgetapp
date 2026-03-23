@@ -9,6 +9,7 @@ from flask import Flask, flash, jsonify, redirect, render_template, request, url
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "budget-app-secret-key-2024")
+app.config["SHOW_TEST_BANNER"] = os.environ.get("SHOW_TEST_BANNER", "false").lower() == "true"
 
 DATA_DIR = "data"
 TRANSACTIONS_FILE = os.path.join(DATA_DIR, "transactions.json")
