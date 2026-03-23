@@ -1,0 +1,74 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: budgetapp-persistent
+objects:
+# 1. THE DATABASE (PostgreSQL + Volume)
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: budget-db-data
+  spec:
+    accessModes: ["ReadWriteOnce"]
+    resources:
+      requests:
+        storage: 1Gi
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: budget-db
+  spec:
+    selector:
+      matchLabels:
+        app: budget-db
+    template:
+      metadata:
+        labels:
+          app: budget-db
+      spec:
+        containers:
+        - name: postgresql
+          image: registry.redhat.io/rhel9/postgresql-15
+          env:
+          - name: POSTGRESQL_USER
+            value: budgetuser
+          - name: POSTGRESQL_PASSWORD
+            value: budgetpass
+          - name: POSTGRESQL_DATABASE
+            value: budget_db
+          volumeMounts:
+          - name: db-storage
+            mountPath: /var/lib/pgsql/data
+        volumes:
+        - name: db-storage
+          persistentVolumeClaim:
+            claimName: budget-db-data
+
+# 2. THE APP (Your Fedora Python App)
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: budgetapp
+  spec:
+    selector:
+      matchLabels:
+        app: budgetapp
+    template:
+      metadata:
+        labels:
+          app: budgetapp
+      spec:
+        containers:
+        - name: python-app
+          image: budgetapp-build:latest # Points to your binary build
+          ports:
+          - containerPort: 8080
+          env:
+          - name: DB_HOST
+            value: budget-db
+          - name: POSTGRESQL_USER
+            value: budgetuser
+          - name: POSTGRESQL_PASSWORD
+            value: budgetpass
+          - name: POSTGRESQL_DATABASE
+            value: budget_db

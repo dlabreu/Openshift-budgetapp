@@ -1,11 +1,11 @@
 import json
 import os
 import uuid
-from datetime import datetime, date
 from collections import defaultdict
+from datetime import date, datetime
 
 import requests
-from flask import Flask, render_template, request, redirect, url_for, jsonify, flash
+from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "budget-app-secret-key-2024")
@@ -31,14 +31,43 @@ CURRENCIES = {
     "NGN": {"symbol": "₦", "name": "Nigerian Naira"},
 }
 
-INCOME_CATEGORIES = ["Salary", "Freelance", "Investment", "Business", "Rental", "Gift", "Other Income"]
-EXPENSE_CATEGORIES = ["Food & Dining", "Housing", "Transport", "Healthcare", "Entertainment",
-                      "Shopping", "Education", "Travel", "Utilities", "Insurance", "Savings", "Other"]
+INCOME_CATEGORIES = [
+    "Salary",
+    "Freelance",
+    "Investment",
+    "Business",
+    "Rental",
+    "Gift",
+    "Other Income",
+]
+EXPENSE_CATEGORIES = [
+    "Food & Dining",
+    "Housing",
+    "Transport",
+    "Healthcare",
+    "Entertainment",
+    "Shopping",
+    "Education",
+    "Travel",
+    "Utilities",
+    "Insurance",
+    "Savings",
+    "Other",
+]
 
 FALLBACK_RATES = {
-    "USD": 1.0, "EUR": 0.92, "GBP": 0.79, "ZAR": 18.63, "JPY": 149.50,
-    "AUD": 1.53, "CAD": 1.36, "CHF": 0.89, "CNY": 7.24, "INR": 83.12,
-    "BRL": 4.97, "NGN": 1540.0,
+    "USD": 1.0,
+    "EUR": 0.92,
+    "GBP": 0.79,
+    "ZAR": 18.63,
+    "JPY": 149.50,
+    "AUD": 1.53,
+    "CAD": 1.36,
+    "CHF": 0.89,
+    "CNY": 7.24,
+    "INR": 83.12,
+    "BRL": 4.97,
+    "NGN": 1540.0,
 }
 
 
@@ -136,7 +165,9 @@ def index():
                 month_expenses += converted
 
     balance = total_income - total_expenses
-    recent_transactions = sorted(transactions, key=lambda x: x["date"], reverse=True)[:5]
+    recent_transactions = sorted(transactions, key=lambda x: x["date"], reverse=True)[
+        :5
+    ]
 
     # Budget progress this month
     budgets = get_budgets()
@@ -146,13 +177,15 @@ def index():
             spent = expense_by_category.get(b["category"], 0.0)
             limit = convert_amount(b["limit"], b["currency"], base_currency)
             pct = min((spent / limit * 100) if limit > 0 else 0, 100)
-            budget_progress.append({
-                "category": b["category"],
-                "spent": spent,
-                "limit": limit,
-                "pct": round(pct, 1),
-                "over": spent > limit,
-            })
+            budget_progress.append(
+                {
+                    "category": b["category"],
+                    "spent": spent,
+                    "limit": limit,
+                    "pct": round(pct, 1),
+                    "over": spent > limit,
+                }
+            )
 
     # Last 6 months chart data
     months = []
@@ -169,7 +202,9 @@ def index():
     chart_income = [round(monthly_data[m]["income"], 2) for m in months]
     chart_expenses = [round(monthly_data[m]["expenses"], 2) for m in months]
 
-    top_categories = sorted(expense_by_category.items(), key=lambda x: x[1], reverse=True)[:6]
+    top_categories = sorted(
+        expense_by_category.items(), key=lambda x: x[1], reverse=True
+    )[:6]
     cat_labels = [c[0] for c in top_categories]
     cat_values = [round(c[1], 2) for c in top_categories]
 
@@ -245,7 +280,10 @@ def add_transaction():
     }
     transactions.append(transaction)
     save_transactions(transactions)
-    flash(f"{'Income' if transaction['type'] == 'income' else 'Expense'} added successfully!", "success")
+    flash(
+        f"{'Income' if transaction['type'] == 'income' else 'Expense'} added successfully!",
+        "success",
+    )
     return redirect(url_for("transactions"))
 
 
@@ -270,7 +308,9 @@ def budgets():
     expense_by_category = defaultdict(float)
     for t in transactions:
         if t["type"] == "expense" and t["date"].startswith(current_month):
-            expense_by_category[t["category"]] += convert_amount(t["amount"], t["currency"], base_currency)
+            expense_by_category[t["category"]] += convert_amount(
+                t["amount"], t["currency"], base_currency
+            )
 
     enriched = []
     for b in all_budgets:
@@ -278,14 +318,16 @@ def budgets():
         spent = expense_by_category.get(b["category"], 0.0)
         remaining = limit_converted - spent
         pct = min((spent / limit_converted * 100) if limit_converted > 0 else 0, 100)
-        enriched.append({
-            **b,
-            "limit_converted": limit_converted,
-            "spent": spent,
-            "remaining": remaining,
-            "pct": round(pct, 1),
-            "over": spent > limit_converted,
-        })
+        enriched.append(
+            {
+                **b,
+                "limit_converted": limit_converted,
+                "spent": spent,
+                "remaining": remaining,
+                "pct": round(pct, 1),
+                "over": spent > limit_converted,
+            }
+        )
 
     return render_template(
         "budgets.html",
@@ -310,13 +352,15 @@ def add_budget():
         existing["updated_at"] = datetime.now().isoformat()
         flash(f"Budget for '{category}' updated.", "success")
     else:
-        budgets.append({
-            "id": str(uuid.uuid4()),
-            "category": category,
-            "limit": float(data["limit"]),
-            "currency": data["currency"],
-            "created_at": datetime.now().isoformat(),
-        })
+        budgets.append(
+            {
+                "id": str(uuid.uuid4()),
+                "category": category,
+                "limit": float(data["limit"]),
+                "currency": data["currency"],
+                "created_at": datetime.now().isoformat(),
+            }
+        )
         flash(f"Budget for '{category}' created.", "success")
     save_budgets(budgets)
     return redirect(url_for("budgets"))
@@ -338,7 +382,9 @@ def reports():
     transactions = get_transactions()
     now = datetime.now()
 
-    monthly_summary = defaultdict(lambda: {"income": 0.0, "expenses": 0.0, "categories": defaultdict(float)})
+    monthly_summary = defaultdict(
+        lambda: {"income": 0.0, "expenses": 0.0, "categories": defaultdict(float)}
+    )
     for t in transactions:
         month = t["date"][:7]
         converted = convert_amount(t["amount"], t["currency"], base_currency)
@@ -353,32 +399,60 @@ def reports():
     for m in sorted_months[:12]:
         d = monthly_summary[m]
         net = d["income"] - d["expenses"]
-        report_data.append({
-            "month": datetime.strptime(m, "%Y-%m").strftime("%B %Y"),
-            "month_key": m,
-            "income": d["income"],
-            "expenses": d["expenses"],
-            "net": net,
-            "top_categories": sorted(d["categories"].items(), key=lambda x: x[1], reverse=True)[:3],
-        })
+        report_data.append(
+            {
+                "month": datetime.strptime(m, "%Y-%m").strftime("%B %Y"),
+                "month_key": m,
+                "income": d["income"],
+                "expenses": d["expenses"],
+                "net": net,
+                "top_categories": sorted(
+                    d["categories"].items(), key=lambda x: x[1], reverse=True
+                )[:3],
+            }
+        )
 
     # All-time stats
-    all_income = sum(convert_amount(t["amount"], t["currency"], base_currency)
-                     for t in transactions if t["type"] == "income")
-    all_expenses = sum(convert_amount(t["amount"], t["currency"], base_currency)
-                       for t in transactions if t["type"] == "expense")
+    all_income = sum(
+        convert_amount(t["amount"], t["currency"], base_currency)
+        for t in transactions
+        if t["type"] == "income"
+    )
+    all_expenses = sum(
+        convert_amount(t["amount"], t["currency"], base_currency)
+        for t in transactions
+        if t["type"] == "expense"
+    )
 
     all_expense_cats = defaultdict(float)
     for t in transactions:
         if t["type"] == "expense":
-            all_expense_cats[t["category"]] += convert_amount(t["amount"], t["currency"], base_currency)
+            all_expense_cats[t["category"]] += convert_amount(
+                t["amount"], t["currency"], base_currency
+            )
 
-    cat_chart_labels = json.dumps([k for k, _ in sorted(all_expense_cats.items(), key=lambda x: x[1], reverse=True)])
-    cat_chart_values = json.dumps([round(v, 2) for _, v in sorted(all_expense_cats.items(), key=lambda x: x[1], reverse=True)])
+    cat_chart_labels = json.dumps(
+        [
+            k
+            for k, _ in sorted(
+                all_expense_cats.items(), key=lambda x: x[1], reverse=True
+            )
+        ]
+    )
+    cat_chart_values = json.dumps(
+        [
+            round(v, 2)
+            for _, v in sorted(
+                all_expense_cats.items(), key=lambda x: x[1], reverse=True
+            )
+        ]
+    )
 
     trend_labels = json.dumps([r["month"] for r in reversed(report_data)])
     trend_income = json.dumps([round(r["income"], 2) for r in reversed(report_data)])
-    trend_expenses = json.dumps([round(r["expenses"], 2) for r in reversed(report_data)])
+    trend_expenses = json.dumps(
+        [round(r["expenses"], 2) for r in reversed(report_data)]
+    )
     trend_net = json.dumps([round(r["net"], 2) for r in reversed(report_data)])
 
     return render_template(
@@ -425,7 +499,13 @@ def refresh_rates():
         resp.raise_for_status()
         data = resp.json()
         rates = {**data["rates"], "USD": 1.0}
-        save_json(RATES_FILE, {"rates": rates, "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M UTC")})
+        save_json(
+            RATES_FILE,
+            {
+                "rates": rates,
+                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M UTC"),
+            },
+        )
         flash("Exchange rates updated successfully!", "success")
     except Exception as e:
         flash(f"Could not fetch live rates: {e}. Using cached rates.", "warning")
@@ -439,13 +519,15 @@ def api_convert():
         from_c = request.args.get("from", "USD")
         to_c = request.args.get("to", "EUR")
         result = convert_amount(amount, from_c, to_c)
-        return jsonify({
-            "amount": amount,
-            "from": from_c,
-            "to": to_c,
-            "result": round(result, 4),
-            "formatted": format_currency(result, to_c),
-        })
+        return jsonify(
+            {
+                "amount": amount,
+                "from": from_c,
+                "to": to_c,
+                "result": round(result, 4),
+                "formatted": format_currency(result, to_c),
+            }
+        )
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 

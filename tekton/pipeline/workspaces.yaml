@@ -1,0 +1,26 @@
+---
+# PVC for the app source code workspace
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: budgetapp-source-pvc
+  namespace: cicd
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+# PVC for the gitops repo workspace
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: budgetapp-gitops-pvc
+  namespace: cicd
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Mi

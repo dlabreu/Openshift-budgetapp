@@ -1,2 +1,4 @@
 flask==3.0.0
 requests==2.31.0
+# Production WSGI server — never run Flask's built-in dev server in a container.
+gunicorn==21.2.0
