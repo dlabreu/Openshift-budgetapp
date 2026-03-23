@@ -4,13 +4,13 @@
 
 :root {
   --sidebar-width: 240px;
-  --sidebar-bg: #0f172a;
+  --sidebar-bg: #1e3a5f;
   --sidebar-text: #94a3b8;
-  --sidebar-active: #6366f1;
+  --sidebar-active: #3b82f6;
   --topbar-height: 64px;
   --card-bg: #ffffff;
   --card-border: #e2e8f0;
-  --body-bg: #f1f5f9;
+  --body-bg: #eff6ff;
   --text-primary: #1e293b;
   --text-muted: #64748b;
 }
